@@ -6,6 +6,12 @@ const IMAGES = [
   { src: "images/04.jpg", title: "向日葵花田", tags: "自然 花 暖色" },
   { src: "images/05.jpg", title: "極簡和室", tags: "室內 日式 禪" },
   { src: "images/06.jpg", title: "宇宙星雲", tags: "星空 太空 星雲" },
+  { src: "images/07.jpg", title: "枯山水庭園", tags: "日式 禪 庭園" },
+  { src: "images/08.jpg", title: "雨夜市集", tags: "城市 賽博龐克 夜景 台北" },
+  { src: "images/09.jpg", title: "流體泡泡", tags: "抽象 3D 柔和" },
+  { src: "images/10.jpg", title: "窗邊午睡貓", tags: "貓 療癒 室內" },
+  { src: "images/11.jpg", title: "沙漠星河", tags: "星空 沙漠 銀河" },
+  { src: "images/12.jpg", title: "北歐客廳", tags: "室內 北歐 極簡" },
 ];
 
 const gallery = document.getElementById("gallery");
