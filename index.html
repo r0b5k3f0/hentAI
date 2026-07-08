@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>hentAI 圖片展示 Gallery</title>
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <h1>hentAI 圖片展示</h1>
+    <p class="subtitle">一個簡單、輕量、響應式的靜態圖片展示網站</p>
+  </header>
+
+  <main>
+    <section class="toolbar">
+      <input type="search" id="search" placeholder="搜尋圖片（關鍵字）…" aria-label="搜尋圖片" />
+      <select id="sort" aria-label="排序方式">
+        <option value="default">預設順序</option>
+        <option value="name">依檔名</option>
+        <option value="random">隨機打散</option>
+      </select>
+    </section>
+
+    <section id="gallery" class="gallery" aria-live="polite"></section>
+
+    <p id="empty" class="empty" hidden>找不到符合的圖片 🙈</p>
+  </main>
+
+  <footer class="site-footer">
+    <p>© <span id="year"></span> hentAI · 以 GitHub Pages 部署</p>
+  </footer>
+
+  <!-- Lightbox -->
+  <div id="lightbox" class="lightbox" hidden>
+    <button class="lightbox-close" aria-label="關閉">✕</button>
+    <img id="lightbox-img" src="" alt="" />
+    <div id="lightbox-caption" class="lightbox-caption"></div>
+  </div>
+
+  <script src="assets/gallery.js"></script>
+</body>
+</html>
