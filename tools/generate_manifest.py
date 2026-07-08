@@ -34,6 +34,9 @@ KNOWN_META = {
   "16.jpg": {"title": "櫻花巫女", "tags": "二次元 動漫 萌系 女角 和風"},
   "17.jpg": {"title": "工坊機械師", "tags": "二次元 動漫 萌系 女角 機械 科幻"},
   "18.jpg": {"title": "森林巡守員", "tags": "二次元 動漫 萌系 女角 自然"},
+  "19.jpg": {"title": "航海旗袍魔法陣", "tags": "二次元 動漫 女角 PicX OnePiece 魔法"},
+  "20.jpg": {"title": "鏡中倒影", "tags": "二次元 動漫 女角 PicX 鏡像"},
+  "21.jpg": {"title": "闇黑魔導女王", "tags": "二次元 動漫 女角 PicX 奇幻"},
 }
 
 def main():
