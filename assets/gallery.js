@@ -34,6 +34,7 @@ const META_FALLBACK = {
   "images/19.jpg": { title: "航海旗袍魔法陣", tags: "二次元 動漫 女角 PicX OnePiece 魔法" },
   "images/20.jpg": { title: "鏡中倒影", tags: "二次元 動漫 女角 PicX 鏡像" },
   "images/21.jpg": { title: "闇黑魔導女王", tags: "二次元 動漫 女角 PicX 奇幻" },
+  "images/22.jpg": { title: "浮空島夕景", tags: "二次元 動漫 萌系 女角 風景 4K" },
 };
 
 function prettyTitleFromSrc(src) {
