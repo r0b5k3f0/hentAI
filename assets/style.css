@@ -1,11 +1,14 @@
 :root {
   --bg: #0f1115;
   --surface: #171a21;
+  --surface-2: #20242e;
+  --border: #2a2f3a;
   --text: #e8eaf0;
   --muted: #9aa0ad;
   --accent: #6c8cff;
   --radius: 14px;
   --gap: 16px;
+  color-scheme: dark; /* 原生 select 下拉、捲軸等控制項也走深色 */
 }
 
 * { box-sizing: border-box; }
@@ -17,6 +20,7 @@ body {
   color: var(--text);
   line-height: 1.6;
 }
+body.no-scroll { overflow: hidden; } /* 燈箱開啟時鎖住背景捲動 */
 
 .site-header {
   text-align: center;
@@ -38,29 +42,40 @@ main {
   padding: 0 20px 40px;
 }
 
+/* 工具列 */
 .toolbar {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-  margin: 8px 0 28px;
+  align-items: center;
+  margin: 8px 0 24px;
 }
 .toolbar input,
 .toolbar select {
   background: var(--surface);
-  border: 1px solid #2a2f3a;
+  border: 1px solid var(--border);
   color: var(--text);
   padding: 10px 14px;
   border-radius: 10px;
   font-size: 0.95rem;
 }
 .toolbar input { flex: 1; min-width: 200px; }
-.toolbar input:focus,
-.toolbar select:focus {
-  outline: none;
+.toolbar select { cursor: pointer; }
+.toolbar input:focus-visible,
+.toolbar select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
   border-color: var(--accent);
 }
+.status {
+  flex-basis: 100%;
+  margin: 0;
+  min-height: 1.4em;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
 
-/* 瀑布流 Masonry */
+/* 瀑布流 Masonry（CSS columns：排列順序是先直後橫） */
 .gallery {
   column-count: 1;
   column-gap: var(--gap);
@@ -79,21 +94,32 @@ main {
   background: var(--surface);
   border-radius: var(--radius);
   overflow: hidden;
-  cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   break-inside: avoid;
-  margin-bottom: var(--gap);
+  margin: 0 0 var(--gap);
   display: inline-block;
   width: 100%;
 }
-.card:hover {
+.card:hover,
+.card:focus-within {
   transform: translateY(-4px);
-  box-shadow: 0 12px 28px rgba(0,0,0,0.45);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+.card-link {
+  display: block;
+  color: inherit;
+  cursor: zoom-in;
+}
+.card-link:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+  border-radius: var(--radius) var(--radius) 0 0;
 }
 .card img {
   width: 100%;
-  height: auto;
+  height: auto; /* 搭配 width/height 屬性，瀏覽器會先依比例預留空間 */
   display: block;
+  background: var(--surface-2); /* 載入前的佔位底色 */
 }
 .card .caption {
   padding: 10px 14px;
@@ -112,43 +138,98 @@ main {
   color: var(--muted);
   font-size: 0.85rem;
   padding: 24px;
-  border-top: 1px solid #20242e;
+  border-top: 1px solid var(--surface-2);
 }
 
 /* Lightbox */
 .lightbox {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.85);
+  background: rgba(0, 0, 0, 0.88);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   z-index: 50;
-  padding: 24px;
+  padding: 24px 64px;
 }
 .lightbox[hidden] { display: none; }
 .lightbox img {
-  max-width: 90vw;
+  max-width: 100%;
   max-height: 80vh;
+  width: auto;
+  height: auto;
   border-radius: 10px;
+  transition: opacity 0.15s ease;
 }
-.lightbox-close {
+.lightbox.is-loading img { opacity: 0.3; }
+.lightbox.is-loading::after {
+  content: "";
   position: absolute;
-  top: 20px;
-  right: 24px;
-  background: transparent;
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.lightbox-btn {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
   border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
   color: #fff;
-  font-size: 1.6rem;
+  font-size: 1.5rem;
+  line-height: 1;
   cursor: pointer;
+}
+.lightbox-btn:hover { background: rgba(255, 255, 255, 0.22); }
+.lightbox-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.lightbox-close { top: 16px; right: 16px; font-size: 1.2rem; }
+.lightbox-prev,
+.lightbox-next {
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 2rem;
+  padding-bottom: 4px;
+}
+.lightbox-prev { left: 12px; }
+.lightbox-next { right: 12px; }
+.lightbox-counter {
+  position: absolute;
+  top: 26px;
+  left: 20px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
 }
 .lightbox-caption {
   color: #fff;
-  margin-top: 12px;
+  margin: 12px 0 0;
   font-size: 0.95rem;
+  text-align: center;
+  max-width: 90vw;
+}
+
+@media (max-width: 560px) {
+  .lightbox { padding: 64px 48px 24px; }
+  .lightbox-btn { width: 38px; height: 38px; }
+  .lightbox-prev { left: 4px; }
+  .lightbox-next { right: 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card { transition: none; }
+  .card,
+  .lightbox img { transition: none; }
+  .lightbox.is-loading::after { animation: none; }
 }

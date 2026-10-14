@@ -3,8 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#0f1115" />
+  <meta name="description" content="hentAI 圖片展示：一個簡單、輕量、響應式的靜態圖片展示網站，支援關鍵字搜尋、排序與燈箱檢視，以 GitHub Pages 部署。" />
+  <!-- 社群分享預覽（fork 後請把網址改成你自己的 GitHub Pages） -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="hentAI 圖片展示 Gallery" />
+  <meta property="og:description" content="一個簡單、輕量、響應式的靜態圖片展示網站" />
+  <meta property="og:image" content="https://r0b5k3f0.github.io/hentAI/images/01.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
   <title>hentAI 圖片展示 Gallery</title>
+  <!-- 內嵌 SVG favicon：不用多放一個檔案，也避免瀏覽器每次都去要 /favicon.ico 而 404 -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖼️</text></svg>" />
   <link rel="stylesheet" href="assets/style.css" />
+  <script src="assets/gallery.js" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -13,18 +25,21 @@
   </header>
 
   <main>
-    <section class="toolbar">
-      <input type="search" id="search" placeholder="搜尋圖片（關鍵字）…" aria-label="搜尋圖片" />
+    <section class="toolbar" aria-label="搜尋與排序">
+      <input type="search" id="search" placeholder="搜尋圖片（空白分隔可同時下多個關鍵字）…" aria-label="搜尋圖片" autocomplete="off" />
       <select id="sort" aria-label="排序方式">
         <option value="default">預設順序</option>
-        <option value="name">依檔名</option>
+        <option value="name">依檔名 A→Z</option>
+        <option value="name-desc">依檔名 Z→A</option>
         <option value="random">隨機打散</option>
       </select>
+      <p id="status" class="status" role="status"></p>
     </section>
 
-    <section id="gallery" class="gallery" aria-live="polite"></section>
+    <section id="gallery" class="gallery" aria-label="圖片列表"></section>
 
     <p id="empty" class="empty" hidden>找不到符合的圖片 🙈</p>
+    <noscript><p class="empty">此圖庫需要啟用 JavaScript 才能顯示。</p></noscript>
   </main>
 
   <footer class="site-footer">
@@ -32,12 +47,13 @@
   </footer>
 
   <!-- Lightbox -->
-  <div id="lightbox" class="lightbox" hidden>
-    <button class="lightbox-close" aria-label="關閉">✕</button>
-    <img id="lightbox-img" src="" alt="" />
-    <div id="lightbox-caption" class="lightbox-caption"></div>
+  <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="圖片檢視" hidden>
+    <span id="lightbox-counter" class="lightbox-counter"></span>
+    <button type="button" id="lightbox-close" class="lightbox-btn lightbox-close" aria-label="關閉（Esc）">✕</button>
+    <button type="button" id="lightbox-prev" class="lightbox-btn lightbox-nav lightbox-prev" aria-label="上一張（←）">‹</button>
+    <img id="lightbox-img" alt="" decoding="async" />
+    <button type="button" id="lightbox-next" class="lightbox-btn lightbox-nav lightbox-next" aria-label="下一張（→）">›</button>
+    <p id="lightbox-caption" class="lightbox-caption"></p>
   </div>
-
-  <script src="assets/gallery.js"></script>
 </body>
 </html>

@@ -1,192 +1,423 @@
-// hentAI Gallery - 自動掃描版
-const gallery = document.getElementById("gallery");
-const searchInput = document.getElementById("search");
-const sortSelect = document.getElementById("sort");
-const emptyMsg = document.getElementById("empty");
-const lightbox = document.getElementById("lightbox");
-const lightboxImg = document.getElementById("lightbox-img");
-const lightboxCaption = document.getElementById("lightbox-caption");
+// hentAI Gallery
+// 讀取 images/manifest.json（由 tools/generate_manifest.py 產生）並提供搜尋、排序與燈箱。
+(() => {
+  'use strict';
 
-document.getElementById("year").textContent = new Date().getFullYear();
+  /* ------------------------------------------------------------------ */
+  /* 設定                                                                */
+  /* ------------------------------------------------------------------ */
+  const MANIFEST_URL = 'images/manifest.json';
+  const META_URL = 'images/meta.json';
+  const SEARCH_DEBOUNCE_MS = 150;
 
-let IMAGES = [];
+  // 沒有 manifest 時的備援掃描參數：依編號遞增探測，連續幾個編號都沒有就停止。
+  const SCAN = { exts: ['jpg', 'jpeg', 'png', 'webp'], maxNumber: 999, stopAfterMisses: 5 };
 
-// 預設 metadata：有提供就用，沒有就用檔名自動生成
-const META_FALLBACK = {
-  "images/01.jpg": { title: "晨曦山湖", tags: "風景 自然 山 湖" },
-  "images/02.jpg": { title: "藍紫流波", tags: "抽象 數位藝術 漸層" },
-  "images/03.jpg": { title: "霓虹夜城", tags: "城市 賽博龐克 夜景" },
-  "images/04.jpg": { title: "向日葵花田", tags: "自然 花 暖色" },
-  "images/05.jpg": { title: "極簡和室", tags: "室內 日式 禪" },
-  "images/06.jpg": { title: "宇宙星雲", tags: "星空 太空 星雲" },
-  "images/07.jpg": { title: "枯山水庭園", tags: "日式 禪 庭園" },
-  "images/08.jpg": { title: "雨夜市集", tags: "城市 賽博龐克 夜景 台北" },
-  "images/09.jpg": { title: "流體泡泡", tags: "抽象 3D 柔和" },
-  "images/10.jpg": { title: "窗邊午睡貓", tags: "貓 療癒 室內" },
-  "images/11.jpg": { title: "沙漠星河", tags: "星空 沙漠 銀河" },
-  "images/12.jpg": { title: "北歐客廳", tags: "室內 北歐 極簡" },
-  "images/13.jpg": { title: "粉髮圖書魔法師", tags: "二次元 動漫 萌系 女角 魔法" },
-  "images/14.jpg": { title: "咖啡廳吧檯女孩", tags: "二次元 動漫 萌系 女角 咖啡" },
-  "images/15.jpg": { title: "雪夜圍巾少女", tags: "二次元 動漫 萌系 女角 冬天" },
-  "images/16.jpg": { title: "櫻花巫女", tags: "二次元 動漫 萌系 女角 和風" },
-  "images/17.jpg": { title: "工坊機械師", tags: "二次元 動漫 萌系 女角 機械 科幻" },
-  "images/18.jpg": { title: "森林巡守員", tags: "二次元 動漫 萌系 女角 自然" },
-  "images/19.jpg": { title: "航海旗袍魔法陣", tags: "二次元 動漫 女角 PicX OnePiece 魔法" },
-  "images/20.jpg": { title: "鏡中倒影", tags: "二次元 動漫 女角 PicX 鏡像" },
-  "images/21.jpg": { title: "闇黑魔導女王", tags: "二次元 動漫 女角 PicX 奇幻" },
-  "images/22.jpg": { title: "浮空島夕景", tags: "二次元 動漫 萌系 女角 風景 4K" },
-};
+  // 必須和 style.css 的欄數斷點一致，瀏覽器才能從 srcset 挑到正確尺寸。
+  const SIZES = [
+    '(min-width: 1100px) 280px',
+    '(min-width: 860px) calc((100vw - 72px) / 3)',
+    '(min-width: 560px) calc((100vw - 56px) / 2)',
+    'calc(100vw - 40px)',
+  ].join(', ');
 
-function prettyTitleFromSrc(src) {
-  const name = src.split('/').pop().split('.')[0];
-  return name;
-}
+  /* ------------------------------------------------------------------ */
+  /* DOM                                                                 */
+  /* ------------------------------------------------------------------ */
+  const $ = (id) => document.getElementById(id);
+  const ui = {
+    gallery: $('gallery'),
+    search: $('search'),
+    sort: $('sort'),
+    status: $('status'),
+    empty: $('empty'),
+    year: $('year'),
+    lightbox: $('lightbox'),
+    lbImg: $('lightbox-img'),
+    lbCaption: $('lightbox-caption'),
+    lbCounter: $('lightbox-counter'),
+    lbPrev: $('lightbox-prev'),
+    lbNext: $('lightbox-next'),
+    lbClose: $('lightbox-close'),
+  };
 
-function getMeta(src) {
-  return META_FALLBACK[src] || { title: prettyTitleFromSrc(src), tags: "二次元 動漫" };
-}
+  if (ui.year) ui.year.textContent = String(new Date().getFullYear());
 
-// 嘗試載入一張圖片，回傳 true/false
-function testImage(src) {
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onload = () => resolve(true);
-    img.onerror = () => resolve(false);
-    img.src = src + '?v=' + Date.now(); // 避免快取誤判
-  });
-}
+  /* ------------------------------------------------------------------ */
+  /* 狀態                                                                */
+  /* ------------------------------------------------------------------ */
+  let allImages = [];     // 正規化後的完整清單（manifest 順序）
+  let sortedImages = [];  // 套用排序後的清單；隨機模式只在切換時洗一次，搜尋時不會重洗
+  let currentList = [];   // 目前畫面上的清單（排序 + 搜尋）
+  let currentIndex = -1;  // 燈箱目前的 index（相對於 currentList）
+  let lastFocused = null; // 開燈箱前的焦點元素，關閉後還原
+  const cardCache = new Map(); // item -> <figure>，搜尋／排序時重用節點而不是重建
 
-// 自動掃描 images/ 資料夾
-// 策略：01-99，支援 jpg/jpeg/png/webp
-async function autoDiscoverImages() {
-  const exts = ['jpg', 'jpeg', 'png', 'webp'];
-  const found = [];
-  const maxNum = 99;
+  /* ------------------------------------------------------------------ */
+  /* 工具                                                                */
+  /* ------------------------------------------------------------------ */
+  const fileName = (src) => src.split('/').pop();
+  const stem = (name) => {
+    const i = name.lastIndexOf('.');
+    return i > 0 ? name.slice(0, i) : name;
+  };
+  const titleFromSrc = (src) => stem(fileName(src)).replace(/[-_]+/g, ' ').trim() || src;
+  const naturalCompare = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
 
-  // 並行批次偵測，避免一次爆量
-  const candidates = [];
-  for (let i = 1; i <= maxNum; i++) {
-    const num = String(i).padStart(2, '0');
-    for (const ext of exts) {
-      candidates.push(`images/${num}.${ext}`);
-    }
-  }
-  // 也嘗試無前導零的 1-99
-  for (let i = 1; i <= maxNum; i++) {
-    for (const ext of exts) {
-      candidates.push(`images/${i}.${ext}`);
-    }
+  function normalizeTags(tags) {
+    if (Array.isArray(tags)) return tags.map((t) => String(t).trim()).filter(Boolean);
+    if (typeof tags === 'string') return tags.split(/[\s,，、]+/).filter(Boolean);
+    return [];
   }
 
-  // 去重
-  const unique = [...new Set(candidates)];
-
-  // 分批並行測
-  const batchSize = 12;
-  for (let i = 0; i < unique.length; i += batchSize) {
-    const batch = unique.slice(i, i + batchSize);
-    const results = await Promise.all(batch.map(src => testImage(src).then(ok => ({src, ok}))));
-    for (const r of results) {
-      if (r.ok) found.push(r.src);
+  // 把 manifest 的一筆資料整理成前端用的物件；格式不對就回傳 null 略過。
+  function normalizeItem(raw) {
+    if (!raw || typeof raw.src !== 'string' || !raw.src) return null;
+    const item = {
+      src: raw.src,
+      width: Number(raw.width) || 0,
+      height: Number(raw.height) || 0,
+      title: (typeof raw.title === 'string' && raw.title.trim()) || titleFromSrc(raw.src),
+      tags: normalizeTags(raw.tags),
+      thumb: null,
+    };
+    const t = raw.thumb;
+    if (t && typeof t === 'object' && typeof t.src === 'string' && t.src && t.src !== item.src) {
+      item.thumb = { src: t.src, width: Number(t.width) || 0, height: Number(t.height) || 0 };
+    } else if (typeof t === 'string' && t && t !== item.src) {
+      item.thumb = { src: t, width: 0, height: 0 };
     }
+    item.searchText = [item.title, item.tags.join(' '), fileName(item.src)].join(' ').toLowerCase();
+    return item;
   }
-  
-  // 依檔名排序，去重
-  const deduped = [...new Set(found)].sort();
-  return deduped.map(src => ({
-    src,
-    ...getMeta(src)
-  }));
-}
 
-async function loadImages() {
-  gallery.innerHTML = `<p class="empty">掃描 images/ 中…</p>`;
-  try {
-    // 1. 優先嘗試讀取 manifest.json (由 tools/generate_manifest.py 產生)
-    const res = await fetch('images/manifest.json', { cache: 'no-store' });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        IMAGES = data;
-        applyFilters();
-        return;
+  function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function debounce(fn, ms) {
+    let timer;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), ms);
+    };
+  }
+
+  function setStatus(text) {
+    if (ui.status) ui.status.textContent = text;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 載入                                                                */
+  /* ------------------------------------------------------------------ */
+  async function fetchJson(url) {
+    const res = await fetch(url, { cache: 'no-cache' }); // 走 ETag 驗證，不用每次重抓
+    if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+    return res.json();
+  }
+
+  // 不加 cache-buster：探測成功的 URL 之後就是畫面上要用的 URL，等於順便預先載入。
+  function probeImage(src) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ src, width: img.naturalWidth, height: img.naturalHeight });
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  }
+
+  // 備援：images/01.jpg、images/1.jpg … 依編號探測，連續 N 個編號都沒有就停。
+  async function discoverImages() {
+    const found = [];
+    let misses = 0;
+    for (let n = 1; n <= SCAN.maxNumber && misses < SCAN.stopAfterMisses; n++) {
+      const names = new Set([String(n).padStart(2, '0'), String(n)]);
+      const candidates = [];
+      for (const name of names) for (const ext of SCAN.exts) candidates.push(`images/${name}.${ext}`);
+      const hits = (await Promise.all(candidates.map(probeImage))).filter(Boolean);
+      if (hits.length) {
+        found.push(...hits);
+        misses = 0;
+      } else {
+        misses++;
       }
     }
-  } catch(e) {}
-  
-  // 2. Fallback: 自動掃描
-  const discovered = await autoDiscoverImages();
-  IMAGES = discovered;
-  applyFilters();
-}
-
-function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+    return found;
   }
-  return a;
-}
 
-function render(list) {
-  gallery.innerHTML = "";
-  if (list.length === 0) {
-    emptyMsg.hidden = false;
-    return;
+  async function loadImages() {
+    setStatus('載入圖片清單中…');
+
+    // 1) 優先讀 manifest.json
+    try {
+      const data = await fetchJson(MANIFEST_URL);
+      const items = (Array.isArray(data) ? data : []).map(normalizeItem).filter(Boolean);
+      if (items.length) return items;
+      console.warn('[gallery] manifest.json 是空的，改用自動掃描。');
+    } catch (err) {
+      console.warn('[gallery] 無法載入 manifest.json，改用自動掃描（較慢）。', err);
+    }
+
+    // 2) 備援：自動掃描，並盡量套用 meta.json 的標題／標籤
+    setStatus('找不到 manifest.json，正在掃描 images/…（執行 tools/generate_manifest.py 可加速載入）');
+    let meta = {};
+    try {
+      const data = await fetchJson(META_URL);
+      if (data && typeof data === 'object') meta = data;
+    } catch (_) {
+      /* 沒有 meta.json 就用檔名當標題 */
+    }
+    const found = await discoverImages();
+    return found
+      .map((f) => normalizeItem({ ...f, ...(meta[fileName(f.src)] || {}) }))
+      .filter(Boolean);
   }
-  emptyMsg.hidden = true;
-  list.forEach((item) => {
-    const card = document.createElement("figure");
-    card.className = "card";
-    card.innerHTML = `
-      <img src="${item.src}" alt="${item.title}" loading="lazy" />
-      <figcaption class="caption">${item.title}</figcaption>
-    `;
-    card.addEventListener("click", () => openLightbox(item));
-    gallery.appendChild(card);
+
+  /* ------------------------------------------------------------------ */
+  /* 渲染                                                                */
+  /* ------------------------------------------------------------------ */
+  function createCard(item) {
+    const fig = document.createElement('figure');
+    fig.className = 'card';
+
+    // 用 <a href=原圖> 當卡片本體：天生可聚焦、可用鍵盤開啟，沒有 JS 也能點開原圖。
+    const link = document.createElement('a');
+    link.className = 'card-link';
+    link.href = item.src;
+    link.setAttribute('aria-label', `放大檢視：${item.title}`);
+
+    const img = document.createElement('img');
+    img.setAttribute('alt', item.title);
+    img.setAttribute('loading', 'lazy');
+    img.setAttribute('decoding', 'async');
+    // 先給寬高，瀏覽器就能預留空間：不會跳版，lazy loading 也才判斷得出哪些圖在視窗外。
+    if (item.width && item.height) {
+      img.setAttribute('width', String(item.width));
+      img.setAttribute('height', String(item.height));
+    }
+    if (item.thumb) {
+      if (item.thumb.width && item.width) {
+        img.setAttribute('srcset', `${item.thumb.src} ${item.thumb.width}w, ${item.src} ${item.width}w`);
+        img.setAttribute('sizes', SIZES);
+      }
+      img.setAttribute('src', item.thumb.src);
+    } else {
+      img.setAttribute('src', item.src);
+    }
+
+    const cap = document.createElement('figcaption');
+    cap.className = 'caption';
+    cap.textContent = item.title;
+
+    link.append(img);
+    fig.append(link, cap);
+
+    link.addEventListener('click', (e) => {
+      // 保留中鍵／Ctrl／Cmd 點擊「在新分頁開啟原圖」的原生行為
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      openLightbox(currentList.indexOf(item));
+    });
+    return fig;
+  }
+
+  function cardFor(item) {
+    let card = cardCache.get(item);
+    if (!card) {
+      card = createCard(item);
+      cardCache.set(item, card);
+    }
+    return card;
+  }
+
+  function render(list) {
+    currentList = list;
+    ui.gallery.replaceChildren(...list.map(cardFor));
+
+    const total = allImages.length;
+    if (list.length === 0) {
+      ui.empty.textContent = '找不到符合的圖片 🙈';
+      ui.empty.hidden = false;
+      setStatus(`符合 0 / ${total} 張`);
+    } else {
+      ui.empty.hidden = true;
+      setStatus(list.length === total ? `共 ${total} 張` : `符合 ${list.length} / ${total} 張`);
+    }
+  }
+
+  function applySort() {
+    const mode = ui.sort.value;
+    let list = [...allImages];
+    if (mode === 'name') list.sort((a, b) => naturalCompare(a.src, b.src));
+    else if (mode === 'name-desc') list.sort((a, b) => naturalCompare(b.src, a.src));
+    else if (mode === 'random') list = shuffle(list);
+    sortedImages = list;
+  }
+
+  function applyFilter() {
+    // 空白分隔多個關鍵字，全部都要命中（AND）
+    const tokens = ui.search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const list = tokens.length
+      ? sortedImages.filter((it) => tokens.every((t) => it.searchText.includes(t)))
+      : sortedImages;
+    render(list);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 燈箱                                                                */
+  /* ------------------------------------------------------------------ */
+  function showAt(index) {
+    const n = currentList.length;
+    if (!n) return;
+    currentIndex = ((index % n) + n) % n; // 頭尾循環
+    const item = currentList[currentIndex];
+
+    ui.lightbox.classList.add('is-loading');
+    ui.lbImg.alt = item.title;
+    ui.lbImg.src = item.src;
+    ui.lbCaption.textContent = item.tags.length ? `${item.title} — ${item.tags.join('、')}` : item.title;
+    ui.lbCounter.textContent = `${currentIndex + 1} / ${n}`;
+
+    const single = n < 2;
+    ui.lbPrev.hidden = single;
+    ui.lbNext.hidden = single;
+
+    // 預先載入前後一張，按方向鍵時就不用等
+    if (!single) {
+      for (const d of [1, -1]) {
+        const pre = new Image();
+        pre.src = currentList[(currentIndex + d + n) % n].src;
+      }
+    }
+  }
+
+  function openLightbox(index) {
+    if (index < 0) return;
+    lastFocused = document.activeElement;
+    ui.lightbox.hidden = false;
+    document.body.classList.add('no-scroll');
+    showAt(index);
+    ui.lbClose.focus();
+  }
+
+  function closeLightbox() {
+    if (ui.lightbox.hidden) return;
+    ui.lightbox.hidden = true;
+    ui.lightbox.classList.remove('is-loading');
+    ui.lbImg.removeAttribute('src');
+    document.body.classList.remove('no-scroll');
+    currentIndex = -1;
+    if (lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
+    lastFocused = null;
+  }
+
+  // 焦點留在燈箱內循環（Tab / Shift+Tab）
+  function trapFocus(e) {
+    const focusables = [ui.lbPrev, ui.lbNext, ui.lbClose].filter((b) => !b.hidden);
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const active = document.activeElement;
+    if (!focusables.includes(active)) {
+      e.preventDefault();
+      first.focus();
+    } else if (e.shiftKey && active === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
+  ui.lbImg.addEventListener('load', () => ui.lightbox.classList.remove('is-loading'));
+  ui.lbImg.addEventListener('error', () => {
+    if (!ui.lbImg.getAttribute('src')) return; // 關閉時移除 src 也會觸發 error，略過
+    ui.lightbox.classList.remove('is-loading');
+    ui.lbCaption.textContent = '圖片載入失敗';
   });
-}
 
-function applyFilters() {
-  const q = searchInput.value.trim().toLowerCase();
-  let list = IMAGES.filter((it) => {
-    if (!q) return true;
-    return (
-      (it.title || '').toLowerCase().includes(q) ||
-      (it.tags || '').toLowerCase().includes(q) ||
-      it.src.toLowerCase().includes(q)
-    );
+  ui.lbClose.addEventListener('click', closeLightbox);
+  ui.lbPrev.addEventListener('click', () => showAt(currentIndex - 1));
+  ui.lbNext.addEventListener('click', () => showAt(currentIndex + 1));
+  ui.lightbox.addEventListener('click', (e) => {
+    if (e.target === ui.lightbox) closeLightbox(); // 點背景關閉
   });
 
-  const mode = sortSelect.value;
-  if (mode === "name") list = [...list].sort((a, b) => a.src.localeCompare(b.src));
-  else if (mode === "random") list = shuffle(list);
+  document.addEventListener('keydown', (e) => {
+    if (ui.lightbox.hidden) return;
+    switch (e.key) {
+      case 'Escape':
+        e.preventDefault();
+        closeLightbox();
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        showAt(currentIndex - 1);
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        showAt(currentIndex + 1);
+        break;
+      case 'Tab':
+        trapFocus(e);
+        break;
+      default:
+    }
+  });
 
-  render(list);
-}
+  // 觸控左右滑動切換
+  let touchStartX = 0;
+  let touchStartY = 0;
+  ui.lightbox.addEventListener(
+    'touchstart',
+    (e) => {
+      const t = e.changedTouches[0];
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+    },
+    { passive: true }
+  );
+  ui.lightbox.addEventListener(
+    'touchend',
+    (e) => {
+      const t = e.changedTouches[0];
+      const dx = t.clientX - touchStartX;
+      const dy = t.clientY - touchStartY;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) showAt(currentIndex + (dx < 0 ? 1 : -1));
+    },
+    { passive: true }
+  );
 
-function openLightbox(item) {
-  lightboxImg.src = item.src;
-  lightboxImg.alt = item.title;
-  lightboxCaption.textContent = `${item.title} — ${item.tags || ''}`;
-  lightbox.hidden = false;
-}
-function closeLightbox() {
-  lightbox.hidden = true;
-  lightboxImg.src = "";
-}
+  /* ------------------------------------------------------------------ */
+  /* 啟動                                                                */
+  /* ------------------------------------------------------------------ */
+  ui.search.addEventListener('input', debounce(applyFilter, SEARCH_DEBOUNCE_MS));
+  ui.sort.addEventListener('change', () => {
+    applySort();
+    applyFilter();
+  });
 
-searchInput.addEventListener("input", applyFilters);
-sortSelect.addEventListener("change", applyFilters);
-lightbox.addEventListener("click", (e) => {
-  if (e.target === lightbox || e.target.classList.contains("lightbox-close")) {
-    closeLightbox();
-  }
-});
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeLightbox();
-});
-
-// 啟動
-loadImages();
+  (async () => {
+    try {
+      allImages = await loadImages();
+    } catch (err) {
+      console.error('[gallery]', err);
+      allImages = [];
+    }
+    if (!allImages.length) {
+      setStatus('找不到任何圖片');
+      ui.empty.textContent =
+        '找不到任何圖片 🙈 請確認 images/ 內有圖片，並執行 tools/generate_manifest.py 產生 manifest.json。';
+      ui.empty.hidden = false;
+      return;
+    }
+    applySort();
+    applyFilter();
+  })();
+})();
