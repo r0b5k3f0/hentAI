@@ -7,8 +7,9 @@
   python tools/generate_manifest.py
 """
 import json
-import os
+import argparse
 from pathlib import Path
+from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parent.parent
 IMAGES_DIR = ROOT / "images"
@@ -38,30 +39,51 @@ KNOWN_META = {
   "20.jpg": {"title": "鏡中倒影", "tags": "二次元 動漫 女角 PicX 鏡像"},
   "21.jpg": {"title": "闇黑魔導女王", "tags": "二次元 動漫 女角 PicX 奇幻"},
   "22.jpg": {"title": "浮空島夕景", "tags": "二次元 動漫 萌系 女角 風景 4K"},
+  "23.jpg": {"title": "星河觀測者", "tags": "二次元 動漫 女角 星空 銀河 流星 天文 觀測站"},
+  "24.jpg": {"title": "海風候車時光", "tags": "二次元 動漫 女角 夏日 海邊 鐵道 旅行 日常"},
+  "25.jpg": {"title": "螢光溫室的精靈", "tags": "二次元 動漫 女角 精靈 奇幻 自然 植物 溫室 療癒"},
+  "26.jpg": {"title": "霓雨巷弄的邂逅", "tags": "二次元 動漫 女角 城市 台北 雨夜 霓虹 科幻 貓 療癒"},
 }
 
-def main():
-    exts = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
-    files = sorted([p for p in IMAGES_DIR.iterdir() if p.suffix.lower() in exts and p.is_file()])
-    
+SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
+
+
+def build_manifest(images_dir):
+    """Build deterministic metadata for top-level image files only."""
+    files = sorted(
+        p for p in images_dir.iterdir()
+        if p.suffix.lower() in SUPPORTED_EXTENSIONS
+        and p.is_file() and not p.is_symlink()
+    )
     manifest = []
-    for f in files:
-        meta = KNOWN_META.get(f.name, {
-            "title": f.stem,
-            "tags": "二次元 動漫" if f.stem.isdigit() and int(f.stem) >= 13 else ""
+    for image in files:
+        meta = KNOWN_META.get(image.name, {
+            "title": image.stem,
+            "tags": "二次元 動漫" if image.stem.isdecimal() and int(image.stem) >= 13 else "",
         })
         manifest.append({
-            "src": f"images/{f.name}",
+            # Escape URL delimiters in filenames (e.g. #, ?, %, spaces).
+            "src": f"images/{quote(image.name, safe='')}",
             "title": meta["title"],
-            "tags": meta["tags"]
+            "tags": meta["tags"],
         })
-    
-    with open(OUTPUT, "w", encoding="utf-8") as fp:
-        json.dump(manifest, fp, ensure_ascii=False, indent=2)
-    
+    return manifest
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="檢查清單是否最新，不寫入檔案")
+    args = parser.parse_args()
+    manifest = build_manifest(IMAGES_DIR)
+    content = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+    if args.check:
+        if not OUTPUT.exists() or OUTPUT.read_text(encoding="utf-8") != content:
+            parser.exit(1, "清單需要更新，請執行 python tools/generate_manifest.py\n")
+        print("✓ manifest.json 已是最新版本")
+        return
+    OUTPUT.write_text(content, encoding="utf-8")
     print(f"✓ 掃描到 {len(manifest)} 張圖片 -> {OUTPUT.relative_to(ROOT)}")
-    for m in manifest:
-        print(f"  - {m['src']}  {m['title']}")
+
 
 if __name__ == "__main__":
     main()
