@@ -14,15 +14,18 @@
 
   <main>
     <section class="toolbar">
-      <input type="search" id="search" placeholder="搜尋圖片（關鍵字）…" aria-label="搜尋圖片" />
-      <select id="sort" aria-label="排序方式">
+      <input type="search" id="search" disabled placeholder="搜尋圖片（關鍵字）…" aria-label="搜尋圖片" />
+      <select id="sort" disabled aria-label="排序方式">
         <option value="default">預設順序</option>
         <option value="name">依檔名</option>
         <option value="random">隨機打散</option>
       </select>
     </section>
 
-    <section id="gallery" class="gallery" aria-live="polite"></section>
+    <p id="status" class="status" role="status" aria-atomic="true">正在載入圖片清單…</p>
+    <button id="retry" class="retry" type="button" hidden>重新載入</button>
+    <noscript><p class="empty">請啟用 JavaScript 以瀏覽圖庫。</p></noscript>
+    <section id="gallery" class="gallery" aria-label="圖片圖庫" aria-busy="true"></section>
 
     <p id="empty" class="empty" hidden>找不到符合的圖片 🙈</p>
   </main>
@@ -32,12 +35,13 @@
   </footer>
 
   <!-- Lightbox -->
-  <div id="lightbox" class="lightbox" hidden>
-    <button class="lightbox-close" aria-label="關閉">✕</button>
-    <img id="lightbox-img" src="" alt="" />
+  <dialog id="lightbox" class="lightbox" aria-label="圖片放大檢視" aria-describedby="lightbox-caption">
+    <button type="button" class="lightbox-close" aria-label="關閉">✕</button>
+    <img id="lightbox-img" alt="" />
+    <p id="lightbox-error" role="status" hidden>圖片載入失敗，請關閉後重試。</p>
     <div id="lightbox-caption" class="lightbox-caption"></div>
-  </div>
+  </dialog>
 
-  <script src="assets/gallery.js"></script>
+  <script type="module" src="assets/gallery.js"></script>
 </body>
 </html>
