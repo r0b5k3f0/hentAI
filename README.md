@@ -23,6 +23,9 @@ https://r0b5k3f0.github.io/hentAI/
 
 ```text
 hentAI/
+├── .github/workflows/
+│   ├── generate-manifest.yml # 自動更新圖片清單
+│   └── tests.yml             # 單元與瀏覽器測試
 ├── index.html
 ├── assets/
 │   ├── style.css
@@ -33,6 +36,8 @@ hentAI/
 │   └── ...                 # 圖片原檔
 ├── tools/generate_manifest.py
 ├── tests/                  # Node、Python 與 Playwright 測試
+├── package.json             # 僅開發測試相依與指令
+├── package-lock.json
 ├── playwright.config.mjs
 ├── README.md
 └── README_en.md
@@ -91,11 +96,13 @@ npm run test:browser
 
 測試會自動啟動本地 HTTP 伺服器，或重用已啟動的 8000 埠伺服器。Linux 若缺少瀏覽器系統函式庫，可使用 `npx playwright install --with-deps chromium`。也可設定 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` 使用已安裝的 Chromium。
 
-自動化 CI 的 `Tests` workflow 另以 patch 提供，未包含在此分支的提交中。使用具備 `workflows` 寫入權限的 GitHub 連線套用並推送後，即可在 push 與 pull request 執行產生器、單元測試與 Chromium 互動測試。網站部署不需 `node_modules`，也不需執行建置。
+`Tests` workflow（`.github/workflows/tests.yml`）已包含在專案中，會在 push 與 pull request 執行產生器、單元測試與 Chromium 互動測試。同一分支推送且已有 PR 時，兩種事件會各執行一次測試，屬於正常行為。
+
+CI 會先重新產生清單，但不會提交產生的變更；提交前仍應在本地執行 `python3 tools/generate_manifest.py --check`，確保部署使用的清單已更新。網站部署不需 `node_modules`，也不需執行建置。
 
 ## 部署到 GitHub Pages
 
-在倉庫 **Settings → Pages**，選擇 **Deploy from a branch**，來源設為 `gh-pages` / `root`。將已驗證的變更合併至部署分支後，等待 Pages 建置完成。
+在倉庫 **Settings → Pages**，選擇 **Deploy from a branch**，來源設為 `gh-pages` / `root`。將已通過 PR 測試的變更合併至部署分支後，到 **Actions** 確認 **pages build and deployment** 成功。`Tests` 通過只代表測試成功，不代表網站已完成部署。
 
 ## 授權
 

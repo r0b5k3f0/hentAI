@@ -23,6 +23,9 @@ Requires a modern browser supporting JavaScript modules, `fetch`, and native `<d
 
 ```text
 hentAI/
+├── .github/workflows/
+│   ├── generate-manifest.yml # Automatic manifest updates
+│   └── tests.yml             # Unit and browser tests
 ├── index.html
 ├── assets/
 │   ├── style.css
@@ -33,6 +36,8 @@ hentAI/
 │   └── ...                 # Original images
 ├── tools/generate_manifest.py
 ├── tests/                  # Node, Python, and Playwright tests
+├── package.json             # Development-only dependencies and scripts
+├── package-lock.json
 ├── playwright.config.mjs
 ├── README.md
 └── README_en.md
@@ -91,11 +96,13 @@ npm run test:browser
 
 Tests start an HTTP server automatically or reuse one already running on port 8000. On Linux, use `npx playwright install --with-deps chromium` if system libraries are missing. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use an existing Chromium installation.
 
-The optional `Tests` workflow is supplied separately as a patch and is not committed on this branch. After applying and pushing it with GitHub workflow write permission, it runs the generator, unit tests, and Chromium interaction tests on pushes and pull requests. Deploying the site does not require `node_modules` or a build step.
+The included `Tests` workflow (`.github/workflows/tests.yml`) runs the generator, unit tests, and Chromium interaction tests on pushes and pull requests. A push to a branch with an open PR triggers both events, so two test runs are expected.
+
+CI regenerates the manifest but does not commit the result. Run `python3 tools/generate_manifest.py --check` locally before committing to ensure the deployed manifest is up to date. Deploying the site does not require `node_modules` or a build step.
 
 ## GitHub Pages Deployment
 
-In **Settings → Pages**, choose **Deploy from a branch**, with `gh-pages` / `root` as the source. Merge validated changes into the deployment branch and wait for the Pages build to complete.
+In **Settings → Pages**, choose **Deploy from a branch**, with `gh-pages` / `root` as the source. After PR tests pass, merge into the deployment branch and confirm that **pages build and deployment** succeeds in **Actions**. Passing `Tests` verifies the code; it does not mean the site has finished deploying.
 
 ## License
 
